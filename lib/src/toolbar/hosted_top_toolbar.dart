@@ -94,7 +94,10 @@ class HostedTopToolbar extends StatelessWidget {
   }
 
   Widget _build(BuildContext context, Widget? _) {
-    final topInset = MediaQuery.viewPaddingOf(context).top;
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final topInset = viewPadding.top;
+    // In landscape the bar keeps clear of the notch and the rounded corners, like a native bar.
+    final sides = EdgeInsets.only(left: viewPadding.left, right: viewPadding.right);
     final upperEntry = blend.upper;
     final lowerEntry = blend.lower;
     final upper = TopToolbarContent.of(upperEntry, titleOnly: titleOnly);
@@ -154,6 +157,7 @@ class HostedTopToolbar extends StatelessWidget {
                   _layer(
                     key: ValueKey<Object>(lowerEntry.id),
                     content: lower,
+                    sides: sides,
                     opacity: lowerOpacity,
                     interactive: !upperOwns,
                   ),
@@ -161,13 +165,14 @@ class HostedTopToolbar extends StatelessWidget {
                   _layer(
                     key: ValueKey<Object>(upperEntry.id),
                     content: upper,
+                    sides: sides,
                     opacity: upperOpacity,
                     interactive: upperOwns,
                   ),
                 if (backOpacity != null)
                   Positioned(
                     key: const ValueKey<String>('adaptive_toolbar_back'),
-                    left: 16 + (_isWindowed(context) ? 62 : 0),
+                    left: 16 + sides.left + (_isWindowed(context) ? 62 : 0),
                     bottom: 0,
                     child: FadeTransition(
                       key: const ValueKey<String>('adaptive_toolbar_back_fade'),
@@ -197,6 +202,7 @@ class HostedTopToolbar extends StatelessWidget {
     required TopToolbarContent content,
     required Animation<double> opacity,
     required bool interactive,
+    required EdgeInsets sides,
   }) {
     // alwaysIncludeSemantics: a layer that fades to zero during a back swipe
     // must not drop its semantics and restore them when the swipe comes back;
@@ -209,7 +215,9 @@ class HostedTopToolbar extends StatelessWidget {
       alwaysIncludeSemantics: true,
       child: ExcludeSemantics(
         excluding: !interactive,
-        child: IgnorePointer(
+        child: Padding(
+          padding: titleOnly ? EdgeInsets.zero : sides,
+          child: IgnorePointer(
           ignoring: !interactive,
           child: titleOnly
               // On iPhone Duo the title sits at the leading edge and the
@@ -233,6 +241,7 @@ class HostedTopToolbar extends StatelessWidget {
                   },
                 )
               : _FallbackBar(content: content),
+          ),
         ),
       ),
     );
