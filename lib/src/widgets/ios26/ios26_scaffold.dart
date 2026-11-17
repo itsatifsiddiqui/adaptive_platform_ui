@@ -7,6 +7,7 @@ import '../../platform/platform_info.dart';
 import '../../platform/system_vertical_bar.dart';
 import '../../style/sf_symbol.dart';
 import '../../toolbar/duo_vertical_bar.dart';
+import '../../platform/system_top_bar.dart';
 import '../../toolbar/toolbar_chrome_scope.dart';
 import '../adaptive_app_bar_action.dart';
 import '../adaptive_bottom_navigation_bar.dart';
@@ -350,6 +351,11 @@ class _IOS26ScaffoldState extends State<IOS26Scaffold>
         ? mq.padding.left
         : mq.padding.right;
     if (showTopToolbar || trailingInset > 0) {
+      // Under the host on the open iPhone Duo the bar sits in the status
+      // island's row, above the safe area, so content starts right below it.
+      final hostedBarTop = (chrome?.hostsToolbar ?? false) && !duoVerticalPose
+          ? TopBarScope.maybeTopOf(context)
+          : null;
       final topInset = !showTopToolbar
           ? 0.0
           : duoVerticalPose
@@ -363,12 +369,12 @@ class _IOS26ScaffoldState extends State<IOS26Scaffold>
         child: MediaQuery(
           data: mq.copyWith(
             padding: mq.padding.copyWith(
-              top: mq.padding.top + topInset,
+              top: (hostedBarTop ?? mq.padding.top) + topInset,
               left: mq.padding.left - (barOnLeft ? trailingInset : 0),
               right: mq.padding.right - (barOnLeft ? 0 : trailingInset),
             ),
             viewPadding: mq.viewPadding.copyWith(
-              top: mq.viewPadding.top + topInset,
+              top: (hostedBarTop ?? mq.viewPadding.top) + topInset,
             ),
           ),
           child: bodyContent,

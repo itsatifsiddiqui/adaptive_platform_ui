@@ -97,7 +97,7 @@ final class VerticalBarEdgeStreamHandler: NSObject, FlutterStreamHandler {
 /// between Split View panes does not change the view's size, as both panes are
 /// the same width, but it does change the safe-area insets, so those are the
 /// signal for pane moves.
-private final class EdgeObserverView: UIView {
+final class EdgeObserverView: UIView {
     var onChange: ((UIView) -> Void)?
 
     override func layoutSubviews() {

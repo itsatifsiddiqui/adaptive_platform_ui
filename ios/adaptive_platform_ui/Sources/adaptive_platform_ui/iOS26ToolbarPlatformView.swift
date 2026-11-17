@@ -154,8 +154,16 @@ class iOS26ToolbarPlatformView: NSObject, FlutterPlatformView {
 
         containerView.addSubview(navigationBar)
 
+        // The bar sits where the system puts top bars: below the status bar on
+        // iPhones, in the status island's row on the open iPhone Duo.
+        let topAnchor: NSLayoutYAxisAnchor
+        if #available(iOS 27.1, *) {
+            topAnchor = containerView.layoutGuide(for: .bar(onEdge: UIRectEdge.top, extent: 44)).topAnchor
+        } else {
+            topAnchor = containerView.safeAreaLayoutGuide.topAnchor
+        }
         NSLayoutConstraint.activate([
-            navigationBar.topAnchor.constraint(equalTo: containerView.safeAreaLayoutGuide.topAnchor),
+            navigationBar.topAnchor.constraint(equalTo: topAnchor),
             navigationBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             navigationBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             navigationBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)

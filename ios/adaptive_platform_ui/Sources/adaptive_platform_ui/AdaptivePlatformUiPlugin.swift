@@ -94,5 +94,12 @@ public class AdaptivePlatformUiPlugin: NSObject, FlutterPlugin {
             binaryMessenger: registrar.messenger()
         )
         verticalBarEdgeChannel.setStreamHandler(VerticalBarEdgeStreamHandler(registrar: registrar))
+
+        // iPhone Duo: where the system puts a top bar, in the status island's row (iOS 27.1)
+        let topBarChannel = FlutterEventChannel(
+            name: "adaptive_platform_ui/top_bar",
+            binaryMessenger: registrar.messenger()
+        )
+        topBarChannel.setStreamHandler(TopBarStreamHandler(registrar: registrar))
     }
 }

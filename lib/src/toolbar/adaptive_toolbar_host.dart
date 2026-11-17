@@ -12,6 +12,7 @@ import 'hosted_top_toolbar.dart';
 import 'toolbar_blend.dart';
 import 'toolbar_chrome_scope.dart';
 import 'toolbar_registry.dart';
+import '../platform/system_top_bar.dart';
 
 /// Fixed toolbar chrome that lives above the navigator.
 ///
@@ -63,6 +64,9 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
   /// and in tests, where no platform channel answers.
   ValueListenable<SystemVerticalBarEdge>? _edge;
 
+  /// Where the system puts a top bar; null below iOS 27.1 and in tests.
+  ValueListenable<double?>? _barTop;
+
   /// What the debug log last reported, to print only the changes.
   SystemVerticalBarEdge _loggedEdge = SystemVerticalBarEdge.unknown;
   DuoPose? _loggedPose;
@@ -81,6 +85,7 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
       // The side the bar belongs on comes from the system, not from insets:
       // the leading Split View pane has none to read.
       _edge = SystemVerticalBar.edge..addListener(_onEdgeChanged);
+      _barTop = SystemTopBar.top..addListener(_onEdgeChanged);
     }
   }
 
@@ -97,6 +102,7 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
   @override
   void dispose() {
     _edge?.removeListener(_onEdgeChanged);
+    _barTop?.removeListener(_onEdgeChanged);
     _foldSub?.cancel();
     _blend.dispose();
     _registry.dispose();
@@ -148,9 +154,16 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
               // adding it only in some poses would move the navigator in the
               // element tree whenever the pose changes (moving between Split
               // View panes), and rebuild every route.
-              _BarInset(pose: pose, child: widget.child),
+              // Only the horizontal bar moves; the Duo's vertical bar poses keep their title band.
+              TopBarScope(
+                top: pose == null ? _barTop?.value : null,
+                child: _BarInset(pose: pose, child: widget.child),
+              ),
               if (hostsToolbar)
-                HostedTopToolbar(blend: _blend, titleOnly: pose != null),
+                _TopBarInset(
+                  top: pose == null ? _barTop?.value : null,
+                  child: HostedTopToolbar(blend: _blend, titleOnly: pose != null),
+                ),
               if (pose != null)
                 // The bar sits on whichever edge the pose names: the right in
                 // most poses, the left in the leading Split View pane.
@@ -199,6 +212,29 @@ class _BarInset extends StatelessWidget {
               padding: pose.addStrip(mq.padding),
               viewPadding: pose.addStrip(mq.viewPadding),
             ),
+      child: child,
+    );
+  }
+}
+
+/// Gives the fixed toolbar the system's top bar position as its top inset, so
+/// on the open iPhone Duo it sits in the status island's row.
+class _TopBarInset extends StatelessWidget {
+  const _TopBarInset({required this.top, required this.child});
+
+  final double? top;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = this.top;
+    if (top == null) return child;
+    final mq = MediaQuery.of(context);
+    return MediaQuery(
+      data: mq.copyWith(
+        padding: mq.padding.copyWith(top: top),
+        viewPadding: mq.viewPadding.copyWith(top: top),
+      ),
       child: child,
     );
   }
