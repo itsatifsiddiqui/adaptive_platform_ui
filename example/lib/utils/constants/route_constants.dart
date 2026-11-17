@@ -22,7 +22,7 @@ class RouteConstants {
   String badgeNavigation = 'badge-navigation';
   String tooltip = 'tooltip';
   String segmentedControl = 'segmented-control';
-  String nativeSearchTab = 'native-search-tab';
+  String nativeRootTab = 'native-root-tab';
   String snackbar = 'snackbar';
   String datePicker = 'date-picker';
   String timePicker = 'time-picker';

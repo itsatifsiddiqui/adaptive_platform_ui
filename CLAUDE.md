@@ -81,8 +81,7 @@ Located in `ios/Classes/`:
 - TabBarPlatformView (UITabBar with badges)
 - AlertDialogView, PopupMenuButtonView (dialogs)
 - BlurViewPlatformView (Liquid Glass blur effect)
-- ScaffoldManager, NativeTabBarManager (layout coordination)
-- SearchTabBarController (**experimental** - replaces Flutter root view controller, not production-ready)
+- TabRootController (`iOS26NativeTabBarManager.swift`, iOS 27+: a real UITabBarController that holds the Flutter view, driven by `NativeRootTabBar`)
 
 ## Conventions
 

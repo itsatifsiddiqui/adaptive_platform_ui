@@ -367,13 +367,11 @@ class _HomePageState extends State<HomePage> {
               ),
               _DemoItem(
                 icon: PlatformInfo.isIOS
-                    ? CupertinoIcons.search_circle_fill
-                    : Icons.search,
-                title: 'Native Search Tab',
-                description:
-                    'EXPERIMENTAL: Native tab bar with search transformation',
-                routeName: RouterService.routes.nativeSearchTab,
-                isCritical: true,
+                    ? CupertinoIcons.square_grid_2x2
+                    : Icons.tab,
+                title: 'Native Root Tab Bar',
+                description: 'iOS 27+: the system tab bar hosts the whole app',
+                routeName: RouterService.routes.nativeRootTab,
               ),
             ],
           ),

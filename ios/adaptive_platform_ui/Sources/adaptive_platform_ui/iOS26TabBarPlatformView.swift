@@ -38,34 +38,6 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
     private var currentBadgeTexts: [String?] = []
     private var currentBadgeColors: [Int?] = []
     private var currentBadgeTextColors: [Int?] = []
-    private let imageCache = NSCache<NSString, UIImage>()
-
-    /// Applies a badge to a tab bar item from the Flutter-provided styling.
-    /// Precedence: a non-empty [text] wins over [count]; otherwise a positive
-    /// [count] is shown; otherwise no badge. [colorARGB] sets the badge
-    /// background (nil = system default red), [textColorARGB] the glyph color
-    /// (nil = platform default). A transparent background + a colored glyph
-    /// renders a clean dot (e.g. badgeText "●").
-    private static func applyBadge(to item: UITabBarItem, count: Int?, text: String?, colorARGB: Int?, textColorARGB: Int?) {
-        let value: String?
-        if let text = text, !text.isEmpty {
-            value = text
-        } else if let count = count, count > 0 {
-            value = count > 99 ? "99+" : String(count)
-        } else {
-            value = nil
-        }
-        item.badgeValue = value
-        item.badgeColor = colorARGB != nil ? colorFromARGB(colorARGB!) : nil
-        if let argb = textColorARGB {
-            let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: colorFromARGB(argb)]
-            item.setBadgeTextAttributes(attrs, for: .normal)
-            item.setBadgeTextAttributes(attrs, for: .selected)
-        } else {
-            item.setBadgeTextAttributes(nil, for: .normal)
-            item.setBadgeTextAttributes(nil, for: .selected)
-        }
-    }
 
     private static func badgeAt<T>(_ arr: [T?], _ i: Int) -> T? {
         return i < arr.count ? arr[i] : nil
@@ -130,12 +102,12 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
             if let v = dict["selectedIndex"] as? NSNumber { selectedIndex = v.intValue }
             if let v = dict["isDark"] as? NSNumber { isDark = v.boolValue }
             if let v = dict["isRtl"] as? NSNumber { isRtl = v.boolValue }
-            if let n = dict["tint"] as? NSNumber { tint = Self.colorFromARGB(n.intValue) }
+            if let n = dict["tint"] as? NSNumber { tint = TabItemImages.colorFromARGB(n.intValue) }
             if let n = dict["unselectedItemTint"] as? NSNumber {
-                unselectedTint = Self.colorFromARGB(n.intValue)
+                unselectedTint = TabItemImages.colorFromARGB(n.intValue)
                 NSLog("🎨 Parsed unselectedItemTint from dict: \(unselectedTint!)")
             }
-            if let n = dict["backgroundColor"] as? NSNumber { bg = Self.colorFromARGB(n.intValue) }
+            if let n = dict["backgroundColor"] as? NSNumber { bg = TabItemImages.colorFromARGB(n.intValue) }
             if let m = dict["minimizeBehavior"] as? NSNumber { minimize = m.intValue }
         }
 
@@ -262,16 +234,12 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                     if !self.configureRuntimeImages(for: item, index: i) {
                         if i < assetIcons.count && !assetIcons[i].isEmpty {
                             let assetName = assetIcons[i]
-                            let key = FlutterDartProject.lookupKey(forAsset: assetName)
-                            let rawImageOriginal = UIImage(named: key)
-                            let rawImage = rawImageOriginal != nil ? self.resizeImage(image: rawImageOriginal!) : nil
+                            let rawImage = TabItemImages.flutterAsset(assetName)
 
                             var selRawImage = rawImage
                             if i < selectedAssetIcons.count && !selectedAssetIcons[i].isEmpty {
-                                let selKey = FlutterDartProject.lookupKey(forAsset: selectedAssetIcons[i])
-                                let selRawOriginal = UIImage(named: selKey)
-                                if selRawOriginal != nil {
-                                    selRawImage = self.resizeImage(image: selRawOriginal!)
+                                if let selRawOriginal = TabItemImages.flutterAsset(selectedAssetIcons[i]) {
+                                    selRawImage = selRawOriginal
                                 }
                             }
 
@@ -319,7 +287,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                 }
 
                 // Set badge (count / text / colors)
-                Self.applyBadge(
+                TabItemImages.applyBadge(
                     to: item,
                     count: badgeCount,
                     text: Self.badgeAt(badgeTexts, i),
@@ -498,16 +466,12 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                         if !self.configureRuntimeImages(for: item, index: i) {
                             if i < assetIcons.count && !assetIcons[i].isEmpty {
                                 let assetName = assetIcons[i]
-                                let key = FlutterDartProject.lookupKey(forAsset: assetName)
-                                let rawImageOriginal = UIImage(named: key)
-                                let rawImage = rawImageOriginal != nil ? self.resizeImage(image: rawImageOriginal!) : nil
+                                let rawImage = TabItemImages.flutterAsset(assetName)
 
                                 var selRawImage = rawImage
                                 if i < selectedAssetIcons.count && !selectedAssetIcons[i].isEmpty {
-                                    let selKey = FlutterDartProject.lookupKey(forAsset: selectedAssetIcons[i])
-                                    let selRawOriginal = UIImage(named: selKey)
-                                    if selRawOriginal != nil {
-                                        selRawImage = self.resizeImage(image: selRawOriginal!)
+                                    if let selRawOriginal = TabItemImages.flutterAsset(selectedAssetIcons[i]) {
+                                        selRawImage = selRawOriginal
                                     }
                                 }
 
@@ -558,7 +522,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                     }
 
                     // Set badge (count / text / colors)
-                    Self.applyBadge(
+                    TabItemImages.applyBadge(
                         to: item,
                         count: badgeCount,
                         text: Self.badgeAt(badgeTexts, i),
@@ -601,12 +565,12 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
             var unselectedColor: UIColor? = nil
 
             if let n = args["tint"] as? NSNumber {
-                let c = Self.colorFromARGB(n.intValue)
+                let c = TabItemImages.colorFromARGB(n.intValue)
                 self.tabBar?.tintColor = c
                 tintColor = c
             }
             if let n = args["unselectedItemTint"] as? NSNumber {
-                let c = Self.colorFromARGB(n.intValue)
+                let c = TabItemImages.colorFromARGB(n.intValue)
                 if #available(iOS 10.0, *) {
                     self.tabBar?.unselectedItemTintColor = c
                     NSLog("✅ setStyle: unselectedItemTintColor set to \(c)")
@@ -620,7 +584,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                 unselectedColor = c
             }
             if let n = args["backgroundColor"] as? NSNumber {
-                let c = Self.colorFromARGB(n.intValue)
+                let c = TabItemImages.colorFromARGB(n.intValue)
                 self.tabBar?.barTintColor = c
             }
 
@@ -694,7 +658,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
             // Update existing tab bar items with new badge values
             if let bar = self.tabBar, let items = bar.items {
                 for (index, item) in items.enumerated() {
-                    Self.applyBadge(
+                    TabItemImages.applyBadge(
                         to: item,
                         count: Self.badgeAt(badgeCounts, index),
                         text: Self.badgeAt(self.currentBadgeTexts, index),
@@ -746,16 +710,12 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                 if !configureRuntimeImages(for: item, index: i) {
                     if i < currentAssetIcons.count && !currentAssetIcons[i].isEmpty {
                         if #available(iOS 26.0, *) {
-                            let key = FlutterDartProject.lookupKey(forAsset: currentAssetIcons[i])
-                            let rawImageOriginal = UIImage(named: key)
-                            let rawImage = rawImageOriginal != nil ? self.resizeImage(image: rawImageOriginal!) : nil
+                            let rawImage = TabItemImages.flutterAsset(currentAssetIcons[i])
 
                             var selRawImage = rawImage
                             if i < currentSelectedAssetIcons.count && !currentSelectedAssetIcons[i].isEmpty {
-                                let selKey = FlutterDartProject.lookupKey(forAsset: currentSelectedAssetIcons[i])
-                                let selRawOriginal = UIImage(named: selKey)
-                                if selRawOriginal != nil {
-                                    selRawImage = self.resizeImage(image: selRawOriginal!)
+                                if let selRawOriginal = TabItemImages.flutterAsset(currentSelectedAssetIcons[i]) {
+                                    selRawImage = selRawOriginal
                                 }
                             }
 
@@ -766,15 +726,11 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                             }
                             selectedImage = selRawImage?.withRenderingMode(.alwaysTemplate)
                         } else {
-                            let key = FlutterDartProject.lookupKey(forAsset: currentAssetIcons[i])
-                            let rawImageOriginal = UIImage(named: key)
-                            image = rawImageOriginal != nil ? self.resizeImage(image: rawImageOriginal!) : nil
+                            image = TabItemImages.flutterAsset(currentAssetIcons[i])
 
                             if i < currentSelectedAssetIcons.count && !currentSelectedAssetIcons[i].isEmpty {
-                                let selKey = FlutterDartProject.lookupKey(forAsset: currentSelectedAssetIcons[i])
-                                let selRawOriginal = UIImage(named: selKey)
-                                if selRawOriginal != nil {
-                                    selectedImage = self.resizeImage(image: selRawOriginal!)
+                                if let selRawOriginal = TabItemImages.flutterAsset(currentSelectedAssetIcons[i]) {
+                                    selectedImage = selRawOriginal
                                 } else {
                                     selectedImage = image
                                 }
@@ -809,7 +765,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
                 }
             }
 
-            Self.applyBadge(
+            TabItemImages.applyBadge(
                 to: item,
                 count: badgeCount,
                 text: Self.badgeAt(currentBadgeTexts, i),
@@ -832,14 +788,6 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
         if let bar = self.tabBar, bar === tabBar, let items = bar.items, let idx = items.firstIndex(of: item) {
             channel.invokeMethod("valueChanged", arguments: ["index": idx])
         }
-    }
-
-    private static func colorFromARGB(_ argb: Int) -> UIColor {
-        let a = CGFloat((argb >> 24) & 0xFF) / 255.0
-        let r = CGFloat((argb >> 16) & 0xFF) / 255.0
-        let g = CGFloat((argb >> 8) & 0xFF) / 255.0
-        let b = CGFloat(argb & 0xFF) / 255.0
-        return UIColor(red: r, green: g, blue: b, alpha: a)
     }
 
     private func runtimeFilePath(for index: Int, selected: Bool) -> String {
@@ -875,53 +823,6 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
         return UIImage(systemName: "person.crop.circle")
     }
 
-    private func loadRuntimeImage(filePath: String, networkURL: String) -> UIImage? {
-        if !filePath.isEmpty, let image = UIImage(contentsOfFile: filePath) {
-            return avatarImage(from: image)
-        }
-
-        if !networkURL.isEmpty, let cached = imageCache.object(forKey: networkURL as NSString) {
-            return avatarImage(from: cached)
-        }
-
-        return nil
-    }
-
-    private func fetchNetworkImageIfNeeded(
-        urlString: String,
-        completion: @escaping (UIImage?) -> Void
-    ) {
-        guard !urlString.isEmpty else {
-            completion(nil)
-            return
-        }
-
-        if let cached = imageCache.object(forKey: urlString as NSString) {
-            completion(avatarImage(from: cached))
-            return
-        }
-
-        guard let url = URL(string: urlString) else {
-            completion(nil)
-            return
-        }
-
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let self = self,
-                  let data = data,
-                  let image = UIImage(data: data) else {
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
-
-            self.imageCache.setObject(image, forKey: urlString as NSString)
-            let avatar = self.avatarImage(from: image)
-            DispatchQueue.main.async {
-                completion(avatar)
-            }
-        }.resume()
-    }
-
     private func configureRuntimeImages(for item: UITabBarItem, index: Int) -> Bool {
         guard hasRuntimeImage(for: index) else { return false }
 
@@ -930,14 +831,14 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
         let unselectedNetwork = runtimeNetworkURL(for: index, selected: false)
         let selectedNetwork = runtimeNetworkURL(for: index, selected: true)
 
-        let unselectedImage = loadRuntimeImage(filePath: unselectedFile, networkURL: unselectedNetwork)
-        let selectedImage = loadRuntimeImage(filePath: selectedFile, networkURL: selectedNetwork)
+        let unselectedImage = TabItemImages.loadRuntimeImage(filePath: unselectedFile, networkURL: unselectedNetwork)
+        let selectedImage = TabItemImages.loadRuntimeImage(filePath: selectedFile, networkURL: selectedNetwork)
 
         item.image = (unselectedImage ?? placeholderAvatarImage())?.withRenderingMode(.alwaysOriginal)
         item.selectedImage = (selectedImage ?? unselectedImage ?? placeholderAvatarImage())?.withRenderingMode(.alwaysOriginal)
 
         if unselectedImage == nil && !unselectedNetwork.isEmpty {
-            fetchNetworkImageIfNeeded(urlString: unselectedNetwork) { [weak item] avatar in
+            TabItemImages.fetchNetworkImageIfNeeded(urlString: unselectedNetwork) { [weak item] avatar in
                 guard let item = item, let avatar = avatar else { return }
                 item.image = avatar.withRenderingMode(.alwaysOriginal)
                 if selectedImage == nil && selectedNetwork.isEmpty && selectedFile.isEmpty {
@@ -947,7 +848,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
         }
 
         if selectedImage == nil && !selectedNetwork.isEmpty {
-            fetchNetworkImageIfNeeded(urlString: selectedNetwork) { [weak item] avatar in
+            TabItemImages.fetchNetworkImageIfNeeded(urlString: selectedNetwork) { [weak item] avatar in
                 guard let item = item, let avatar = avatar else { return }
                 item.selectedImage = avatar.withRenderingMode(.alwaysOriginal)
             }
@@ -955,8 +856,127 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
 
         return true
     }
+}
 
-    private func resizeImage(image: UIImage, targetSize: CGSize = CGSize(width: 26, height: 26)) -> UIImage {
+class iOS26TabBarViewFactory: NSObject, FlutterPlatformViewFactory {
+    private let messenger: FlutterBinaryMessenger
+
+    init(messenger: FlutterBinaryMessenger) {
+        self.messenger = messenger
+        super.init()
+    }
+
+    func create(
+        withFrame frame: CGRect,
+        viewIdentifier viewId: Int64,
+        arguments args: Any?
+    ) -> FlutterPlatformView {
+        return iOS26TabBarPlatformView(
+            frame: frame,
+            viewId: viewId,
+            args: args,
+            messenger: messenger
+        )
+    }
+
+    func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+        return FlutterStandardMessageCodec.sharedInstance()
+    }
+}
+
+/// Badge, colour and icon helpers shared by the tab bar platform view and
+/// the root tab bar, so both draw tabs the same way.
+enum TabItemImages {
+    private static let cache = NSCache<NSString, UIImage>()
+
+    /// Applies a badge to a tab bar item from the Flutter-provided styling.
+    /// Precedence: a non-empty [text] wins over [count]; otherwise a positive
+    /// [count] is shown; otherwise no badge. [colorARGB] sets the badge
+    /// background (nil = system default red), [textColorARGB] the glyph color
+    /// (nil = platform default). A transparent background + a colored glyph
+    /// renders a clean dot (e.g. badgeText "●").
+    static func applyBadge(to item: UITabBarItem, count: Int?, text: String?, colorARGB: Int?, textColorARGB: Int?) {
+        let value: String?
+        if let text = text, !text.isEmpty {
+            value = text
+        } else if let count = count, count > 0 {
+            value = count > 99 ? "99+" : String(count)
+        } else {
+            value = nil
+        }
+        item.badgeValue = value
+        item.badgeColor = colorARGB != nil ? colorFromARGB(colorARGB!) : nil
+        if let argb = textColorARGB {
+            let attrs: [NSAttributedString.Key: Any] = [.foregroundColor: colorFromARGB(argb)]
+            item.setBadgeTextAttributes(attrs, for: .normal)
+            item.setBadgeTextAttributes(attrs, for: .selected)
+        } else {
+            item.setBadgeTextAttributes(nil, for: .normal)
+            item.setBadgeTextAttributes(nil, for: .selected)
+        }
+    }
+
+    static func colorFromARGB(_ argb: Int) -> UIColor {
+        let a = CGFloat((argb >> 24) & 0xFF) / 255.0
+        let r = CGFloat((argb >> 16) & 0xFF) / 255.0
+        let g = CGFloat((argb >> 8) & 0xFF) / 255.0
+        let b = CGFloat(argb & 0xFF) / 255.0
+        return UIColor(red: r, green: g, blue: b, alpha: a)
+    }
+
+    /// A Flutter asset image, shrunk to tab icon size.
+    static func flutterAsset(_ name: String) -> UIImage? {
+        guard let image = UIImage(named: FlutterDartProject.lookupKey(forAsset: name)) else { return nil }
+        return resizeImage(image: image)
+    }
+
+    static func loadRuntimeImage(filePath: String, networkURL: String) -> UIImage? {
+        if !filePath.isEmpty, let image = UIImage(contentsOfFile: filePath) {
+            return avatarImage(from: image)
+        }
+
+        if !networkURL.isEmpty, let cached = cache.object(forKey: networkURL as NSString) {
+            return avatarImage(from: cached)
+        }
+
+        return nil
+    }
+
+    static func fetchNetworkImageIfNeeded(
+        urlString: String,
+        completion: @escaping (UIImage?) -> Void
+    ) {
+        guard !urlString.isEmpty else {
+            completion(nil)
+            return
+        }
+
+        if let cached = cache.object(forKey: urlString as NSString) {
+            completion(avatarImage(from: cached))
+            return
+        }
+
+        guard let url = URL(string: urlString) else {
+            completion(nil)
+            return
+        }
+
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let image = UIImage(data: data) else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            cache.setObject(image, forKey: urlString as NSString)
+            let avatar = avatarImage(from: image)
+            DispatchQueue.main.async {
+                completion(avatar)
+            }
+        }.resume()
+    }
+
+    static func resizeImage(image: UIImage, targetSize: CGSize = CGSize(width: 26, height: 26)) -> UIImage {
         let size = image.size
         if size.width <= targetSize.width && size.height <= targetSize.height {
             return image
@@ -985,7 +1005,7 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
         }
     }
 
-    private func avatarImage(from image: UIImage, targetSize: CGSize = CGSize(width: 26, height: 26)) -> UIImage {
+    static func avatarImage(from image: UIImage, targetSize: CGSize = CGSize(width: 26, height: 26)) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: targetSize)
         return renderer.image { _ in
             UIBezierPath(ovalIn: CGRect(origin: .zero, size: targetSize)).addClip()
@@ -999,31 +1019,5 @@ class iOS26TabBarPlatformView: NSObject, FlutterPlatformView, UITabBarDelegate {
 
             image.draw(in: CGRect(origin: origin, size: scaledSize))
         }
-    }
-}
-
-class iOS26TabBarViewFactory: NSObject, FlutterPlatformViewFactory {
-    private let messenger: FlutterBinaryMessenger
-
-    init(messenger: FlutterBinaryMessenger) {
-        self.messenger = messenger
-        super.init()
-    }
-
-    func create(
-        withFrame frame: CGRect,
-        viewIdentifier viewId: Int64,
-        arguments args: Any?
-    ) -> FlutterPlatformView {
-        return iOS26TabBarPlatformView(
-            frame: frame,
-            viewId: viewId,
-            args: args,
-            messenger: messenger
-        )
-    }
-
-    func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
-        return FlutterStandardMessageCodec.sharedInstance()
     }
 }

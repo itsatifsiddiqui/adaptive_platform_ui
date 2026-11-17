@@ -1,401 +1,225 @@
 import Flutter
 import UIKit
 
-/// Manager for iOS 26+ Native Tab Bar with Search Support
-/// This class manages a native UITabBarController at the app level
-/// and coordinates with Flutter for content display
-@available(iOS 26.0, *)
-class iOS26NativeTabBarManager: NSObject {
+/// Puts the app's one Flutter view inside a real UITabBarController, so the
+/// system draws the tab bar. Only a container's tab bar moves into the iPhone
+/// Duo vertical bar; a bar drawn inside Flutter never does.
+@available(iOS 27.0, *)
+final class TabRootController: UITabBarController, UITabBarControllerDelegate {
+    private let flutterViewController: FlutterViewController
+    private let channel: FlutterMethodChannel
+    private var tabIds: [String] = []
+    private var actionId: String?
+    private var itemsById: [String: NSDictionary] = [:]
+    private var isHiddenByFlutter = false
 
-    static let shared = iOS26NativeTabBarManager()
-
-    private var tabBarController: UITabBarController?
-    private var flutterViewController: FlutterViewController?
-    private var searchController: UISearchController?
-    private var methodChannel: FlutterMethodChannel?
-
-    private var tabConfigurations: [TabConfig] = []
-    private var searchTabIndex: Int = -1
-    private var isEnabled: Bool = false
-
-    struct TabConfig {
-        let title: String
-        let sfSymbol: String?
-        let isSearchTab: Bool
-        let badgeCount: Int?
-    }
-
-    private override init() {
-        super.init()
-    }
-
-    /// Setup native tab bar with Flutter
-    func setup(messenger: FlutterBinaryMessenger) {
-        // Setup method channel
-        self.methodChannel = FlutterMethodChannel(
+    static func register(with registrar: FlutterPluginRegistrar) {
+        let channel = FlutterMethodChannel(
             name: "adaptive_platform_ui/native_tab_bar",
-            binaryMessenger: messenger
+            binaryMessenger: registrar.messenger()
         )
-
-        methodChannel?.setMethodCallHandler { [weak self] call, result in
-            self?.handleMethodCall(call, result: result)
-        }
-    }
-
-    /// Find Flutter view controller
-    private func getFlutterViewController() -> FlutterViewController? {
-        if let flutterVC = flutterViewController {
-            return flutterVC
-        }
-
-        // Try to find it from windows
-        if let window = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
-            if let flutterVC = window.rootViewController as? FlutterViewController {
-                self.flutterViewController = flutterVC
-                return flutterVC
+        var root: TabRootController?
+        channel.setMethodCallHandler { call, result in
+            let args = call.arguments as? [String: Any] ?? [:]
+            switch call.method {
+            case "setTabs":
+                if let root = root {
+                    root.update(with: args)
+                    return result(nil)
+                }
+                // With nothing to show, the Flutter view stays the window's root.
+                guard !(args["items"] as? [Any] ?? []).isEmpty else { return result(nil) }
+                guard let flutterViewController = registrar.viewController as? FlutterViewController,
+                      let window = flutterViewController.view.window else {
+                    return result(FlutterError(code: "no_window", message: "The Flutter view is not in a window yet", details: nil))
+                }
+                let controller = TabRootController(flutterViewController: flutterViewController, channel: channel)
+                controller.update(with: args)
+                controller.install(in: window)
+                root = controller
+                result(nil)
+            case "setSelectedIndex":
+                root?.selectTab(at: (args["index"] as? NSNumber)?.intValue ?? 0)
+                result(nil)
+            case "setHidden":
+                root?.isHiddenByFlutter = (args["hidden"] as? NSNumber)?.boolValue ?? false
+                root?.updateTabBarHidden()
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
             }
         }
+    }
 
+    private init(flutterViewController: FlutterViewController, channel: FlutterMethodChannel) {
+        self.flutterViewController = flutterViewController
+        self.channel = channel
+        super.init(nibName: nil, bundle: nil)
+        delegate = self
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override var childForStatusBarStyle: UIViewController? { selectedViewController }
+    override var childForStatusBarHidden: UIViewController? { selectedViewController }
+    override var childForHomeIndicatorAutoHidden: UIViewController? { selectedViewController }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        flutterViewController.supportedInterfaceOrientations
+    }
+
+    /// Swapped in once and never swapped back, so Flutter keeps one parent
+    /// chain for the rest of the app's life.
+    private func install(in window: UIWindow) {
+        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
+            window.rootViewController = self
+        }
+    }
+
+    private func update(with args: [String: Any]) {
+        let items = args["items"] as? [[String: Any]] ?? []
+        let action = args["action"] as? [String: Any]
+        tabIds = items.compactMap { $0["id"] as? String }
+        actionId = action?["id"] as? String
+
+        let flutterViewController = self.flutterViewController
+        let newTabs = (items + [action].compactMap { $0 }).compactMap { item -> UITab? in
+            guard let id = item["id"] as? String else { return nil }
+            let tab = self.tab(forIdentifier: id) ?? UITab(title: "", image: nil, identifier: id) { _ in
+                TabSlot(flutterViewController: flutterViewController)
+            }
+            apply(item, to: tab)
+            return tab
+        }
+        if newTabs.map(\.identifier) != tabs.map(\.identifier) {
+            setTabs(newTabs, animated: false)
+        }
+
+        // Read through KVC so the plugin still builds against SDKs older than 27.0.
+        let prominentKey = "prominentTabIdentifier"
+        if responds(to: NSSelectorFromString(prominentKey)) {
+            setValue(actionId, forKey: prominentKey)
+        }
+
+        selectTab(at: (args["selectedIndex"] as? NSNumber)?.intValue ?? 0)
+        updateTabBarHidden()
+    }
+
+    /// Updates the tab in place, so its page and the Flutter view inside it stay put.
+    private func apply(_ item: [String: Any], to tab: UITab) {
+        let dictionary = item as NSDictionary
+        guard itemsById[tab.identifier] != dictionary else { return }
+        itemsById[tab.identifier] = dictionary
+
+        tab.title = item["title"] as? String ?? ""
+        tab.badgeValue = item["badge"] as? String
+
+        let filePath = item["filePath"] as? String ?? ""
+        let networkUrl = item["networkUrl"] as? String ?? ""
+        guard filePath.isEmpty && networkUrl.isEmpty else {
+            let avatar = TabItemImages.loadRuntimeImage(filePath: filePath, networkURL: networkUrl)
+            tab.image = (avatar ?? UIImage(systemName: "person.crop.circle"))?.withRenderingMode(.alwaysOriginal)
+            tab.selectedImage = nil
+            guard avatar == nil, !networkUrl.isEmpty else { return }
+            TabItemImages.fetchNetworkImageIfNeeded(urlString: networkUrl) { [weak self, weak tab] image in
+                // The avatar may have changed while this one downloaded.
+                guard let self = self, let tab = tab, let image = image,
+                      self.itemsById[tab.identifier]?["networkUrl"] as? String == networkUrl else { return }
+                tab.image = image.withRenderingMode(.alwaysOriginal)
+            }
+            return
+        }
+
+        tab.image = Self.icon(symbol: item["sfSymbol"], asset: item["assetName"])
+        tab.selectedImage = Self.icon(symbol: item["selectedSfSymbol"], asset: item["selectedAssetName"])
+    }
+
+    /// An SF Symbol, else an image in the app's asset catalog, else a Flutter asset.
+    private static func icon(symbol: Any?, asset: Any?) -> UIImage? {
+        if let name = symbol as? String, !name.isEmpty {
+            return (UIImage(systemName: name) ?? UIImage(named: name))?.withRenderingMode(.alwaysTemplate)
+        }
+        if let name = asset as? String, !name.isEmpty {
+            return TabItemImages.flutterAsset(name)?.withRenderingMode(.alwaysTemplate)
+        }
         return nil
     }
 
-    /// Enable native tab bar mode
-    private func enableNativeTabBar(tabs: [TabConfig], selectedIndex: Int) {
-        guard let flutterVC = getFlutterViewController() else {
-            return
-        }
-
-        // Create tab bar controller if needed
-        if tabBarController == nil {
-            let tabBar = UITabBarController()
-            tabBarController = tabBar
-
-            // Setup iOS 26 appearance
-            setupTabBarAppearance(tabBar)
-        }
-
-        guard let tabBar = tabBarController else { return }
-
-        // Store configuration
-        self.tabConfigurations = tabs
-        self.searchTabIndex = tabs.firstIndex(where: { $0.isSearchTab }) ?? -1
-
-        // Create view controllers for each tab
-        var viewControllers: [UIViewController] = []
-
-        for (index, config) in tabs.enumerated() {
-            if config.isSearchTab {
-                // Create search tab with navigation controller
-                let searchVC = SearchTabViewController()
-                searchVC.tabIndex = index
-                searchVC.onTabSelected = { [weak self] idx in
-                    self?.notifyTabSelected(idx)
-                }
-
-                let navController = UINavigationController(rootViewController: searchVC)
-
-                // Setup search controller
-                let search = UISearchController(searchResultsController: nil)
-                search.searchResultsUpdater = self
-                search.searchBar.delegate = self
-                search.obscuresBackgroundDuringPresentation = false
-                search.searchBar.placeholder = "Search"
-                search.hidesNavigationBarDuringPresentation = false
-
-                searchVC.navigationItem.searchController = search
-                searchVC.navigationItem.hidesSearchBarWhenScrolling = false
-
-                self.searchController = search
-
-                // Setup tab bar item with search system item
-                navController.tabBarItem = UITabBarItem(tabBarSystemItem: .search, tag: index)
-                if !config.title.isEmpty {
-                    navController.tabBarItem.title = config.title
-                }
-
-                viewControllers.append(navController)
-            } else {
-                // Regular tab - use Flutter view
-                let tabVC = FlutterTabViewController()
-                tabVC.tabIndex = index
-                tabVC.onTabSelected = { [weak self] idx in
-                    self?.notifyTabSelected(idx)
-                }
-
-                // Setup tab bar item
-                var image: UIImage?
-                if let symbol = config.sfSymbol {
-                    image = UIImage(systemName: symbol) ?? UIImage(named: symbol)
-                }
-                tabVC.tabBarItem = UITabBarItem(
-                    title: config.title,
-                    image: image,
-                    selectedImage: image
-                )
-                tabVC.tabBarItem.tag = index
-                
-                // Set badge value if provided
-                if let count = config.badgeCount, count > 0 {
-                    tabVC.tabBarItem.badgeValue = count > 99 ? "99+" : String(count)
-                } else {
-                    tabVC.tabBarItem.badgeValue = nil
-                }
-
-                viewControllers.append(tabVC)
-            }
-        }
-
-        tabBar.viewControllers = viewControllers
-        tabBar.selectedIndex = selectedIndex
-        tabBar.delegate = self
-
-        // Replace root view controller
-        if let window = flutterVC.view.window {
-            // Embed Flutter view in the first non-search tab
-            if let firstTab = viewControllers.first(where: { !($0 is UINavigationController) }) as? FlutterTabViewController {
-                firstTab.embedFlutterView(flutterVC.view)
-            }
-
-            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
-                window.rootViewController = tabBar
-            }
-
-            self.isEnabled = true
-        }
+    /// Setting `selectedTab` in code does not call the delegate, so this never echoes back to Dart.
+    private func selectTab(at index: Int) {
+        guard tabIds.indices.contains(index),
+              let tab = self.tab(forIdentifier: tabIds[index]),
+              selectedTab !== tab else { return }
+        selectedTab = tab
     }
 
-    /// Disable native tab bar and return to Flutter-only mode
-    private func disableNativeTabBar() {
-        guard let flutterVC = getFlutterViewController(),
-              let window = flutterVC.view.window else {
-            return
-        }
-
-        // Remove Flutter view from tab if embedded
-        if let tabBar = tabBarController,
-           let selectedVC = tabBar.selectedViewController as? FlutterTabViewController {
-            selectedVC.removeFlutterView()
-        }
-
-        // Restore Flutter as root
-        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
-            window.rootViewController = flutterVC
-        }
-
-        self.isEnabled = false
-        self.tabBarController = nil
+    private func updateTabBarHidden() {
+        let isHidden = isHiddenByFlutter || tabIds.isEmpty
+        guard isHidden != isTabBarHidden else { return }
+        setTabBarHidden(isHidden, animated: true)
     }
 
-    private func setupTabBarAppearance(_ tabBar: UITabBarController) {
-        let appearance = UITabBarAppearance()
-
-        // iOS 26 Liquid Glass design
-        appearance.configureWithDefaultBackground()
-
-        // Enable blur for liquid glass effect
-        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-        appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.8)
-        appearance.shadowColor = .clear
-
-        tabBar.tabBar.standardAppearance = appearance
-        tabBar.tabBar.scrollEdgeAppearance = appearance
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+        // The action tab runs an action, like a button, and never becomes the open tab.
+        guard tab.identifier == actionId else { return true }
+        channel.invokeMethod("onAction", arguments: ["id": tab.identifier])
+        return false
     }
 
-    private func notifyTabSelected(_ index: Int) {
-        methodChannel?.invokeMethod("onTabSelected", arguments: ["index": index])
-
-        // Move Flutter view to selected tab if not search tab
-        if index != searchTabIndex,
-           let flutterView = getFlutterViewController()?.view,
-           let tabBar = tabBarController,
-           let selectedVC = tabBar.selectedViewController as? FlutterTabViewController {
-            selectedVC.embedFlutterView(flutterView)
-        }
-    }
-
-    private func notifySearchQueryChanged(_ query: String) {
-        methodChannel?.invokeMethod("onSearchQueryChanged", arguments: ["query": query])
-    }
-
-    private func notifySearchSubmitted(_ query: String) {
-        methodChannel?.invokeMethod("onSearchSubmitted", arguments: ["query": query])
-    }
-
-    private func handleMethodCall(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        switch call.method {
-        case "enableNativeTabBar":
-            guard let args = call.arguments as? [String: Any],
-                  let tabsData = args["tabs"] as? [[String: Any]] else {
-                result(FlutterError(code: "invalid_args", message: "Invalid tabs data", details: nil))
-                return
-            }
-
-            let tabs = tabsData.compactMap { data -> TabConfig? in
-                guard let title = data["title"] as? String else { return nil }
-                let symbol = data["sfSymbol"] as? String
-                let isSearch = (data["isSearch"] as? Bool) ?? false
-                let badgeCount = data["badgeCount"] as? Int
-                return TabConfig(title: title, sfSymbol: symbol, isSearchTab: isSearch, badgeCount: badgeCount)
-            }
-
-            let selectedIndex = (args["selectedIndex"] as? Int) ?? 0
-            enableNativeTabBar(tabs: tabs, selectedIndex: selectedIndex)
-            result(nil)
-
-        case "disableNativeTabBar":
-            disableNativeTabBar()
-            result(nil)
-
-        case "setSelectedIndex":
-            guard let args = call.arguments as? [String: Any],
-                  let index = args["index"] as? Int else {
-                result(FlutterError(code: "invalid_args", message: "Invalid index", details: nil))
-                return
-            }
-            tabBarController?.selectedIndex = index
-            result(nil)
-
-        case "showSearch":
-            searchController?.isActive = true
-            result(nil)
-
-        case "hideSearch":
-            searchController?.isActive = false
-            result(nil)
-
-        case "isEnabled":
-            result(isEnabled)
-
-        case "setBadgeCounts":
-            guard let args = call.arguments as? [String: Any],
-                  let badgeCounts = args["badgeCounts"] as? [Int?] else {
-                result(FlutterError(code: "invalid_args", message: "Invalid badge counts", details: nil))
-                return
-            }
-
-            // Update badge counts for existing tab bar items
-            if let tabBar = tabBarController, let viewControllers = tabBar.viewControllers {
-                for (index, viewController) in viewControllers.enumerated() {
-                    if index < badgeCounts.count {
-                        let count = badgeCounts[index]
-                        if let count = count, count > 0 {
-                            viewController.tabBarItem.badgeValue = count > 99 ? "99+" : String(count)
-                        } else {
-                            viewController.tabBarItem.badgeValue = nil
-                        }
-                    }
-                }
-            }
-            result(nil)
-
-        default:
-            result(FlutterMethodNotImplemented)
-        }
+    func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
+        guard let index = tabIds.firstIndex(of: selectedTab.identifier) else { return }
+        channel.invokeMethod("onTabSelected", arguments: ["index": index])
     }
 }
 
-// MARK: - UITabBarControllerDelegate
+/// An empty tab page. The page on screen holds the one Flutter view, which
+/// draws every tab itself.
+@available(iOS 27.0, *)
+private final class TabSlot: UIViewController {
+    private let flutterViewController: FlutterViewController
 
-@available(iOS 26.0, *)
-extension iOS26NativeTabBarManager: UITabBarControllerDelegate {
-    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
-        let index = tabBarController.viewControllers?.firstIndex(of: viewController) ?? 0
-        notifyTabSelected(index)
-    }
-}
-
-// MARK: - UISearchResultsUpdating
-
-@available(iOS 26.0, *)
-extension iOS26NativeTabBarManager: UISearchResultsUpdating {
-    func updateSearchResults(for searchController: UISearchController) {
-        guard let query = searchController.searchBar.text else { return }
-        notifySearchQueryChanged(query)
-    }
-}
-
-// MARK: - UISearchBarDelegate
-
-@available(iOS 26.0, *)
-extension iOS26NativeTabBarManager: UISearchBarDelegate {
-    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
-        guard let query = searchBar.text else { return }
-        notifySearchSubmitted(query)
+    init(flutterViewController: FlutterViewController) {
+        self.flutterViewController = flutterViewController
+        super.init(nibName: nil, bundle: nil)
     }
 
-    func searchBarCancelButtonClicked(_ searchBar: UISearchBar) {
-        methodChannel?.invokeMethod("onSearchCancelled", arguments: nil)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
     }
-}
 
-// MARK: - Tab View Controllers
+    // Flutter pauses and drops its surface when told it disappeared, which
+    // would blank the screen on every tab switch.
+    override var shouldAutomaticallyForwardAppearanceMethods: Bool { false }
 
-private class FlutterTabViewController: UIViewController {
-    var tabIndex: Int = 0
-    var onTabSelected: ((Int) -> Void)?
-    private var embeddedFlutterView: UIView?
+    override var childForStatusBarStyle: UIViewController? { children.first }
+    override var childForStatusBarHidden: UIViewController? { children.first }
+    override var childForHomeIndicatorAutoHidden: UIViewController? { children.first }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .clear
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        onTabSelected?(tabIndex)
-    }
-
-    func embedFlutterView(_ flutterView: UIView) {
-        // Remove from previous parent
-        flutterView.removeFromSuperview()
-
-        // Add to this view controller
-        flutterView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(flutterView)
-        NSLayoutConstraint.activate([
-            flutterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            flutterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            flutterView.topAnchor.constraint(equalTo: view.topAnchor),
-            flutterView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-
-        embeddedFlutterView = flutterView
-    }
-
-    func removeFlutterView() {
-        embeddedFlutterView?.removeFromSuperview()
-        embeddedFlutterView = nil
-    }
-}
-
-private class SearchTabViewController: UIViewController {
-    var tabIndex: Int = 0
-    var onTabSelected: ((Int) -> Void)?
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        view.backgroundColor = .systemBackground
-        title = "Search"
-
-        // Add placeholder content
-        let label = UILabel()
-        label.text = "Search results will appear here\n\nSearch functionality is controlled by Flutter"
-        label.numberOfLines = 0
-        label.textAlignment = .center
-        label.textColor = .secondaryLabel
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        view.addSubview(label)
-        NSLayoutConstraint.activate([
-            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-            label.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 20),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -20)
-        ])
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        onTabSelected?(tabIndex)
+    // Taken over once this page is in the window, so the Flutter view moves
+    // between pages without leaving the window.
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        guard flutterViewController.parent !== self else { return }
+        let isFirstPage = flutterViewController.parent == nil
+        if !isFirstPage {
+            flutterViewController.willMove(toParent: nil)
+            flutterViewController.removeFromParent()
+        }
+        addChild(flutterViewController)
+        flutterViewController.view.frame = view.bounds
+        flutterViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(flutterViewController.view)
+        flutterViewController.didMove(toParent: self)
+        // The window told Flutter it disappeared when it stopped being the root.
+        if isFirstPage {
+            flutterViewController.beginAppearanceTransition(true, animated: false)
+            flutterViewController.endAppearanceTransition()
+        }
     }
 }

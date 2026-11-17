@@ -81,7 +81,7 @@ class _InfoPageState extends State<InfoPage> {
               if (PlatformInfo.isIOS26OrHigher()) ...[
                 _InfoRow('IOS26NativeTabBar', 'Available'),
                 _InfoRow('IOS26NativeToolbar', 'Available'),
-                _InfoRow('IOS26NativeSearchTabBar', 'Available'),
+                _InfoRow('NativeRootTabBar', 'iOS 27+'),
               ],
             ]),
             const SizedBox(height: 24),

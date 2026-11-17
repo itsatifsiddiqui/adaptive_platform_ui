@@ -6,7 +6,7 @@ import 'ios26_native_toolbar.dart';
 
 /// Legacy Native iOS 26 scaffold with UITabBar (platform view based)
 /// This is the same as IOS26Scaffold but kept as a separate class for reference
-/// For app-level native search tab bar, use IOS26NativeSearchTabBar directly
+/// For an app-level system tab bar, use NativeRootTabBar
 class IOS26ScaffoldLegacy extends StatefulWidget {
   const IOS26ScaffoldLegacy({
     super.key,

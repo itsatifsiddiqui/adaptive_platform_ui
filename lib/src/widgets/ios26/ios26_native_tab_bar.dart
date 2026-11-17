@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import '../adaptive_scaffold.dart';
+import 'native_tab_icons.dart';
 
 /// Native iOS 26 tab bar using UITabBar platform view
 class IOS26NativeTabBar extends StatefulWidget {
@@ -111,67 +112,32 @@ class _IOS26NativeTabBarState extends State<IOS26NativeTabBar> {
         ((resolvedColor.b * 255.0).round() & 0xff);
   }
 
-  /// Extract SF Symbol name from an icon value.
-  /// Returns empty string for non-SF-Symbol icons (asset paths, IconData, widgets).
-  String _extractSymbol(Object? icon) {
-    if (icon is String && !icon.contains('/')) return icon;
-    return '';
-  }
-
-  /// Extract asset path from an icon value.
-  /// Supports AssetImage, ImageIcon(AssetImage), and string paths containing '/'.
-  /// Returns empty string for SF Symbols or other icon types.
-  String _extractAssetPath(Object? icon) {
-    if (icon is AssetImage) return icon.assetName;
-    if (icon is ImageIcon && icon.image is AssetImage) {
-      return (icon.image as AssetImage).assetName;
-    }
-    if (icon is String && icon.contains('/')) return icon;
-    return '';
-  }
-
-  String _extractFilePath(Object? icon) {
-    if (icon is FileImage) return icon.file.path;
-    if (icon is ImageIcon && icon.image is FileImage) {
-      return (icon.image as FileImage).file.path;
-    }
-    return '';
-  }
-
-  String _extractNetworkUrl(Object? icon) {
-    if (icon is NetworkImage) return icon.url;
-    if (icon is ImageIcon && icon.image is NetworkImage) {
-      return (icon.image as NetworkImage).url;
-    }
-    return '';
-  }
-
   List<String> _mapSymbols() =>
-      widget.destinations.map((e) => _extractSymbol(e.icon)).toList();
+      widget.destinations.map((e) => extractSymbol(e.icon)).toList();
 
   List<String> _mapSelectedSymbols() => widget.destinations
-      .map((e) => _extractSymbol(e.selectedIcon ?? e.icon))
+      .map((e) => extractSymbol(e.selectedIcon ?? e.icon))
       .toList();
 
   List<String> _mapAssetIcons() =>
-      widget.destinations.map((e) => _extractAssetPath(e.icon)).toList();
+      widget.destinations.map((e) => extractAssetPath(e.icon)).toList();
 
   List<String> _mapSelectedAssetIcons() => widget.destinations
-      .map((e) => _extractAssetPath(e.selectedIcon ?? e.icon))
+      .map((e) => extractAssetPath(e.selectedIcon ?? e.icon))
       .toList();
 
   List<String> _mapFileIcons() =>
-      widget.destinations.map((e) => _extractFilePath(e.icon)).toList();
+      widget.destinations.map((e) => extractFilePath(e.icon)).toList();
 
   List<String> _mapSelectedFileIcons() => widget.destinations
-      .map((e) => _extractFilePath(e.selectedIcon ?? e.icon))
+      .map((e) => extractFilePath(e.selectedIcon ?? e.icon))
       .toList();
 
   List<String> _mapNetworkIcons() =>
-      widget.destinations.map((e) => _extractNetworkUrl(e.icon)).toList();
+      widget.destinations.map((e) => extractNetworkUrl(e.icon)).toList();
 
   List<String> _mapSelectedNetworkIcons() => widget.destinations
-      .map((e) => _extractNetworkUrl(e.selectedIcon ?? e.icon))
+      .map((e) => extractNetworkUrl(e.selectedIcon ?? e.icon))
       .toList();
 
   // Native badge styling: badge content + colors mapped to the

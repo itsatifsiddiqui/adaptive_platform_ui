@@ -192,10 +192,9 @@ class RouterService {
                         const SegmentedControlDemoPage(),
                   ),
                   GoRoute(
-                    name: routes.nativeSearchTab,
-                    path: routes.nativeSearchTab,
-                    builder: (context, state) =>
-                        const NativeSearchTabDemoPage(),
+                    name: routes.nativeRootTab,
+                    path: routes.nativeRootTab,
+                    builder: (context, state) => const NativeRootTabDemoPage(),
                   ),
                   GoRoute(
                     name: routes.snackbar,
