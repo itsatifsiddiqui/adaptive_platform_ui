@@ -320,6 +320,34 @@ void main() {
     }
   });
 
+  group('ToolbarRegistry: tab bar owner', () {
+    testWidgets('a tab page in the tab layout\'s own body keeps its tab bar', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        hostedApp(
+          home: AdaptiveScaffold(
+            bottomNavigationBar: AdaptiveBottomNavigationBar(
+              selectedIndex: 0,
+              onTap: (_) {},
+              items: const [
+                AdaptiveNavigationDestination(icon: Icons.home, label: 'Home'),
+                AdaptiveNavigationDestination(icon: Icons.info, label: 'Info'),
+              ],
+            ),
+            body: IndexedStack(children: [page('Home'), page('Info')]),
+          ),
+        ),
+      );
+      await tester.pump();
+      final registry = registryOf(tester);
+
+      final home = registry.active!;
+      expect(home.appBar?.title, 'Home');
+      expect(registry.tabBarOwnerFor(home)?.hasTabBar, isTrue);
+    });
+  });
+
   group('ToolbarRegistry: notifications', () {
     ToolbarEntry entry(Object id) => ToolbarEntry(
       id: id,

@@ -151,7 +151,9 @@ class ToolbarRegistry extends ChangeNotifier {
       final candidate = _entries[i];
       if (candidate.hasTabBar &&
           candidate.route != null &&
-          entry.enclosingRoutes.contains(candidate.route)) {
+          // A page inside the tab layout's own body shares its route.
+          (candidate.route == entry.route ||
+              entry.enclosingRoutes.contains(candidate.route))) {
         return candidate;
       }
     }
