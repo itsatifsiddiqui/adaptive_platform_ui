@@ -361,7 +361,8 @@ class AdaptiveAlertDialog {
                 const SizedBox(height: 12),
               ],
               if (message != null) ...[
-                Text(message, textAlign: TextAlign.center),
+                // Material 3 lines the message up with the title instead of centring it.
+                SizedBox(width: double.infinity, child: Text(message)),
                 if (hasContentBelowMessage) const SizedBox(height: 16),
               ],
               if (hasOtpCode) ...[
