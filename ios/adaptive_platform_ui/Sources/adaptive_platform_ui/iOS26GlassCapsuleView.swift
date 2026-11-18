@@ -79,6 +79,8 @@ class iOS26GlassCapsuleView: NSObject, FlutterPlatformView {
             let glass = UIGlassEffect()
             glass.isInteractive = true
             effectView.effect = glass
+            // A closing menu shrinks back into the glass's own shape, so a layer radius alone ends square.
+            effectView.cornerConfiguration = .capsule()
         } else {
             effectView.effect = UIBlurEffect(style: .systemThinMaterial)
         }
