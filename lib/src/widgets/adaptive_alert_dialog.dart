@@ -418,6 +418,7 @@ class AdaptiveAlertDialog {
         );
 
         return AlertDialog(
+          scrollable: true,
           title: Text(title),
           content: contentWidget,
           // Material convention: dismissive action on the left, confirming
