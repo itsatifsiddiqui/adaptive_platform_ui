@@ -22,6 +22,7 @@ class AdaptiveAppBar {
     this.actions,
     this.leading,
     this.useNativeToolbar = true,
+    this.showsBackdrop = true,
     this.tintColor,
     this.titleWidget,
     this.cupertinoNavigationBar,
@@ -53,6 +54,11 @@ class AdaptiveAppBar {
   ///
   /// If true, [cupertinoNavigationBar] will be ignored and native toolbar will be shown.
   final bool useNativeToolbar;
+
+  /// Whether the fixed iOS 26 toolbar draws its soft gradient behind this
+  /// page's items. Set it to false for a page with a photo at the top, where
+  /// the gradient would wash the photo out.
+  final bool showsBackdrop;
 
   /// Custom widget to display in the title area
   ///
@@ -92,6 +98,7 @@ class AdaptiveAppBar {
     List<AdaptiveAppBarAction>? actions,
     Widget? leading,
     bool? useNativeToolbar,
+    bool? showsBackdrop,
     Color? tintColor,
     Widget? titleWidget,
     PreferredSizeWidget? cupertinoNavigationBar,
@@ -103,6 +110,7 @@ class AdaptiveAppBar {
       actions: actions ?? this.actions,
       leading: leading ?? this.leading,
       useNativeToolbar: useNativeToolbar ?? this.useNativeToolbar,
+      showsBackdrop: showsBackdrop ?? this.showsBackdrop,
       tintColor: tintColor ?? this.tintColor,
       titleWidget: titleWidget ?? this.titleWidget,
       cupertinoNavigationBar:

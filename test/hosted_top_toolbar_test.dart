@@ -71,6 +71,48 @@ Finder get backButton => inBar(find.byType(AdaptiveButton));
 
 void main() {
   group('HostedTopToolbar', () {
+    testWidgets('a page can go without the backdrop', (tester) async {
+      usePhone(tester);
+      final nav = GlobalKey<NavigatorState>();
+      double backdrop() => tester
+          .widget<FadeTransition>(
+            find.byKey(const ValueKey<String>('adaptive_toolbar_backdrop')),
+          )
+          .opacity
+          .value;
+      await tester.pumpWidget(hostedApp(navigatorKey: nav, home: page('Home')));
+      await tester.pump();
+      nav.currentState!.push(
+        CupertinoPageRoute<void>(builder: (_) => page('List')),
+      );
+      await tester.pumpAndSettle();
+      expect(backdrop(), 1);
+
+      nav.currentState!.push(
+        CupertinoPageRoute<void>(
+          builder: (_) => const AdaptiveScaffold(
+            appBar: AdaptiveAppBar(showsBackdrop: false),
+            body: SizedBox.expand(),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      final back = tester.getRect(backButton);
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+        // The shared back button never moves or fades while only the backdrop goes.
+        expect(tester.getRect(backButton), back);
+        expect(opacityOf(tester, find.byType(AdaptiveButton)), 1);
+      }
+      await tester.pumpAndSettle();
+      expect(backdrop(), 0);
+
+      nav.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(backdrop(), 1);
+    });
+
     testWidgets('back fills the toolbar height and is tappable near its edge', (
       tester,
     ) async {

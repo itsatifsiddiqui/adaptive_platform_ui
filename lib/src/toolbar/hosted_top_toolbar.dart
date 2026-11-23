@@ -21,6 +21,7 @@ class TopToolbarContent {
     this.customLeading,
     this.impliesBack = false,
     this.actions = const <AdaptiveAppBarAction>[],
+    this.showsBackdrop = true,
     this.tint,
     this.navigator,
   });
@@ -43,6 +44,7 @@ class TopToolbarContent {
       actions: titleOnly
           ? const <AdaptiveAppBarAction>[]
           : appBar.actions ?? const <AdaptiveAppBarAction>[],
+      showsBackdrop: appBar.showsBackdrop,
       tint: appBar.tintColor,
       navigator: entry.navigator,
     );
@@ -56,6 +58,7 @@ class TopToolbarContent {
   final Widget? customLeading;
   final bool impliesBack;
   final List<AdaptiveAppBarAction> actions;
+  final bool showsBackdrop;
   final Color? tint;
   final NavigatorState? navigator;
 
@@ -65,6 +68,8 @@ class TopToolbarContent {
       customLeading == null &&
       !impliesBack &&
       actions.isEmpty;
+
+  bool get hasBackdrop => showsBackdrop && !isEmpty;
 }
 
 /// The one top toolbar of the app. It stays where it is while pages come and
@@ -116,18 +121,18 @@ class HostedTopToolbar extends StatelessWidget {
     };
 
     // The bar's backdrop belongs to the chrome, not to a page: it only fades
-    // when the toolbar as a whole comes or goes.
+    // when the toolbar as a whole comes or goes, or a page goes without it.
     final Animation<double> backdropOpacity = switch ((
-      upper.isEmpty,
-      lower.isEmpty,
+      upper.hasBackdrop,
+      lower.hasBackdrop,
     )) {
-      (false, false) => kAlwaysCompleteAnimation,
-      (false, true) =>
+      (true, true) => kAlwaysCompleteAnimation,
+      (true, false) =>
         blend.isBlending && lowerEntry != null
             ? upperOpacity
             : kAlwaysCompleteAnimation,
-      (true, false) => lowerOpacity,
-      (true, true) => kAlwaysDismissedAnimation,
+      (false, true) => lowerOpacity,
+      (false, false) => kAlwaysDismissedAnimation,
     };
 
     return Align(
