@@ -1,8 +1,10 @@
+import 'dart:math';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:foldable/foldable.dart';
 
+import '../platform/system_strip_insets.dart';
 import '../platform/system_vertical_bar.dart';
 import '../widgets/adaptive_app_bar_action.dart';
 import '../widgets/adaptive_bottom_navigation_bar.dart';
@@ -154,15 +156,27 @@ abstract final class DuoLayout {
   /// the top of the strip in portrait, at the bottom of it in one landscape
   /// rotation. Measured on the system's own bar: controls start right at the
   /// edge of a region, and keep [kDuoBarEdgeMargin] from a free window edge.
+  ///
+  /// The system's own answer ([system]) wins. The [regions] only decide where
+  /// it has none: below iOS 27.1, and until its reading for this pose arrives.
   static ({double top, double bottom}) barInsets({
     required Size size,
     required DuoPose pose,
     required List<ReservedRegion> regions,
+    SystemStripInsets? system,
   }) {
     // A strip the system did not reserve has no camera or status cluster in
     // it. No region will ever be reported there, so don't wait for one.
     if (!pose.reservedBySystem) {
       return (top: kDuoBarOnlyTopMargin, bottom: kDuoBarEdgeMargin);
+    }
+    if (system != null) {
+      final strip = pose.onLeft ? system.left : system.right;
+      // With a free edge UIKit's region can end 2 points from it, but its own controls stay this far in.
+      return (
+        top: max(strip.top, kDuoBarEdgeMargin),
+        bottom: max(strip.bottom, kDuoBarEdgeMargin),
+      );
     }
     final stripStart = pose.onLeft ? 0.0 : size.width - pose.stripWidth;
     final stripEnd = pose.onLeft ? pose.stripWidth : size.width;
@@ -401,23 +415,35 @@ class DuoVerticalBar extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: SystemStripInsets.latest,
+    builder: (context, latest, _) => _buildBar(context, latest),
+  );
+
+  Widget _buildBar(BuildContext context, SystemStripInsets? latest) {
     final pose = DuoPoseScope.of(context);
     if (pose == null) return const SizedBox.shrink();
+    final size = MediaQuery.sizeOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final system = latest != null && latest.matches(size, viewPadding)
+        ? latest
+        : null;
     final tabs = tabBar?.items ?? const <AdaptiveNavigationDestination>[];
     final insets = DuoLayout.barInsets(
-      size: MediaQuery.sizeOf(context),
+      size: size,
       pose: pose,
       regions: regions,
+      system: system,
     );
     final tabCount = tabs.isNotEmpty ? tabs.length : reservedTabs;
     final tabsHeight = tabCount == 0
         ? 0.0
         : IOS26GlassCapsule.tabsHeight(tabCount) + kDuoBarGroupSpacing;
 
-    return Padding(
+    return _BarPadding(
       // Safe areas are asymmetric on iPhone Duo; read each edge on its own.
       padding: EdgeInsets.only(top: insets.top, bottom: insets.bottom),
+      placement: (size, pose, viewPadding.left, viewPadding.right, system != null),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final room = constraints.maxHeight - tabsHeight;
@@ -610,4 +636,41 @@ class DuoBarBackButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Moves the controls smoothly when the island grows or shrinks, and at once
+/// when [placement] changes: on a rotation, a fold or the first reading.
+class _BarPadding extends StatefulWidget {
+  const _BarPadding({
+    required this.padding,
+    required this.placement,
+    required this.child,
+  });
+
+  final EdgeInsets padding;
+  final Object placement;
+  final Widget child;
+
+  @override
+  State<_BarPadding> createState() => _BarPaddingState();
+}
+
+class _BarPaddingState extends State<_BarPadding> {
+  Duration _duration = Duration.zero;
+
+  @override
+  void didUpdateWidget(_BarPadding oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _duration = widget.placement == oldWidget.placement
+        ? const Duration(milliseconds: 250)
+        : Duration.zero;
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedPadding(
+    duration: _duration,
+    curve: Curves.ease,
+    padding: widget.padding,
+    child: widget.child,
+  );
 }

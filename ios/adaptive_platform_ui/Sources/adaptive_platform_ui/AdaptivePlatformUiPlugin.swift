@@ -100,5 +100,12 @@ public class AdaptivePlatformUiPlugin: NSObject, FlutterPlugin {
             binaryMessenger: registrar.messenger()
         )
         topBarChannel.setStreamHandler(TopBarStreamHandler(registrar: registrar))
+
+        // iPhone Duo: the room the system gives a bar in the side strip (iOS 27.1)
+        let stripInsetsChannel = FlutterEventChannel(
+            name: "adaptive_platform_ui/strip_insets",
+            binaryMessenger: registrar.messenger()
+        )
+        stripInsetsChannel.setStreamHandler(StripInsetsStreamHandler(registrar: registrar))
     }
 }
