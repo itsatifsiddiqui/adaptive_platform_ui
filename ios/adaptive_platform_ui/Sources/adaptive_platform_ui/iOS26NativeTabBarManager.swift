@@ -218,10 +218,12 @@ private final class TabSlot: UIViewController {
             flutterViewController.willMove(toParent: nil)
             flutterViewController.removeFromParent()
         }
-        addChild(flutterViewController)
+        // The view moves first, in one step: removeFromParent leaves it inside
+        // the old page, and iOS 26 throws when a child joins with its view there.
         flutterViewController.view.frame = view.bounds
         flutterViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(flutterViewController.view)
+        addChild(flutterViewController)
         flutterViewController.didMove(toParent: self)
         // The window told Flutter it disappeared when it stopped being the root.
         if isFirstPage {
