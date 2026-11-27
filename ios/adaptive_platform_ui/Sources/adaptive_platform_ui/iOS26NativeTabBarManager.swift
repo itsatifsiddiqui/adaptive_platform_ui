@@ -122,7 +122,9 @@ final class TabRootController: UITabBarController, UITabBarControllerDelegate {
         guard filePath.isEmpty && networkUrl.isEmpty else {
             let avatar = TabItemImages.loadRuntimeImage(filePath: filePath, networkURL: networkUrl)
             tab.image = (avatar ?? UIImage(systemName: "person.crop.circle"))?.withRenderingMode(.alwaysOriginal)
-            tab.selectedImage = nil
+            if #available(iOS 26.1, *) {
+                tab.selectedImage = nil
+            }
             guard avatar == nil, !networkUrl.isEmpty else { return }
             TabItemImages.fetchNetworkImageIfNeeded(urlString: networkUrl) { [weak self, weak tab] image in
                 // The avatar may have changed while this one downloaded.
@@ -134,7 +136,10 @@ final class TabRootController: UITabBarController, UITabBarControllerDelegate {
         }
 
         tab.image = Self.icon(symbol: item["sfSymbol"], asset: item["assetName"])
-        tab.selectedImage = Self.icon(symbol: item["selectedSfSymbol"], asset: item["selectedAssetName"])
+        // iOS 26.0 has no selected image on a tab, so it tints the plain icon instead.
+        if #available(iOS 26.1, *) {
+            tab.selectedImage = Self.icon(symbol: item["selectedSfSymbol"], asset: item["selectedAssetName"])
+        }
     }
 
     /// An SF Symbol, else an image in the app's asset catalog, else a Flutter asset.
