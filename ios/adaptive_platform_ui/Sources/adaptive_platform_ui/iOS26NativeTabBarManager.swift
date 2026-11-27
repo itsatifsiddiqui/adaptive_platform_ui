@@ -4,7 +4,7 @@ import UIKit
 /// Puts the app's one Flutter view inside a real UITabBarController, so the
 /// system draws the tab bar. Only a container's tab bar moves into the iPhone
 /// Duo vertical bar; a bar drawn inside Flutter never does.
-@available(iOS 27.0, *)
+@available(iOS 26.0, *)
 final class TabRootController: UITabBarController, UITabBarControllerDelegate {
     private let flutterViewController: FlutterViewController
     private let channel: FlutterMethodChannel
@@ -96,6 +96,8 @@ final class TabRootController: UITabBarController, UITabBarControllerDelegate {
             setTabs(newTabs, animated: false)
         }
 
+        // iOS 27 lifts the action out beside the tabs. iOS 26 has no such
+        // property, so the action stays a plain tab item that never gets selected.
         // Read through KVC so the plugin still builds against SDKs older than 27.0.
         let prominentKey = "prominentTabIdentifier"
         if responds(to: NSSelectorFromString(prominentKey)) {
@@ -175,7 +177,7 @@ final class TabRootController: UITabBarController, UITabBarControllerDelegate {
 
 /// An empty tab page. The page on screen holds the one Flutter view, which
 /// draws every tab itself.
-@available(iOS 27.0, *)
+@available(iOS 26.0, *)
 private final class TabSlot: UIViewController {
     private let flutterViewController: FlutterViewController
 

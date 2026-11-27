@@ -8,8 +8,9 @@ import '../widgets/adaptive_scaffold.dart';
 import '../widgets/ios26/native_tab_icons.dart';
 import 'platform_info.dart';
 
-/// A button that sits in the native tab bar beside the tabs, such as Create.
-/// Tapping it runs [onPressed]; it never becomes the open tab.
+/// A button in the native tab bar, such as Create: beside the tabs on iOS 27,
+/// the last tab item on iOS 26. Tapping it runs [onPressed]; it never becomes
+/// the open tab.
 class NativeTabAction {
   const NativeTabAction({
     required this.sfSymbol,
@@ -42,10 +43,10 @@ class NativeRootTabBar extends StatefulWidget {
   final ValueChanged<int> onTap;
   final NativeTabAction? action;
 
-  /// iOS 27 is the first to put a container's tab bar in the iPhone Duo's
-  /// vertical bar, and the native side only runs there.
+  /// iOS 26 and up, where the system draws Liquid Glass tab bars. From iOS 27
+  /// the bar also moves into the iPhone Duo's vertical bar.
   static bool get isSupported =>
-      PlatformInfo.isIOS && PlatformInfo.iOSVersion >= 27;
+      PlatformInfo.isIOS && PlatformInfo.iOSVersion >= 26;
 
   @override
   State<NativeRootTabBar> createState() => _NativeRootTabBarState();

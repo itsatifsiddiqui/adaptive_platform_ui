@@ -1332,9 +1332,9 @@ The example app includes:
 - Style and size comparisons
 - Dark mode support
 
-### NativeRootTabBar (iOS 27+) (Do not confuse it with a different widget, AdaptiveBottomNavigationBar.)
+### NativeRootTabBar (iOS 26+) (Do not confuse it with a different widget, AdaptiveBottomNavigationBar.)
 
-Hands your tabs to a real `UITabBarController` that holds the whole Flutter view, so iOS draws the tab bar itself: Liquid Glass at the bottom, or the vertical bar on iPhone Duo. The widget draws nothing in Flutter. The bar hides while another route (a page, sheet or dialog) covers the route the widget is in.
+Hands your tabs to a real `UITabBarController` that holds the whole Flutter view, so iOS draws the tab bar itself: Liquid Glass at the bottom, or the vertical bar on iPhone Duo (iOS 27). The widget draws nothing in Flutter. The bar hides while another route (a page, sheet or dialog) covers the route the widget is in.
 
 ```dart
 if (NativeRootTabBar.isSupported)
@@ -1345,7 +1345,7 @@ if (NativeRootTabBar.isSupported)
     ],
     selectedIndex: selectedIndex,
     onTap: (index) => setState(() => selectedIndex = index),
-    // Optional: a button beside the tabs that never becomes the open tab.
+    // Optional: a button that never becomes the open tab. Beside the tabs on iOS 27, the last tab item on iOS 26.
     action: NativeTabAction(sfSymbol: 'plus', label: 'Create', onPressed: openCreate),
   ),
 ```
@@ -1384,7 +1384,7 @@ Currently available adaptive widgets:
 - ✅ **AdaptiveFormSection** - Grouped form sections with headers and footers
 - ✅ **AdaptiveExpansionTile** - Modern expandable/collapsible content
 - ✅ **AdaptiveTabBarView** - Horizontal swipeable tab bar view
-- ✅ **NativeRootTabBar** - The system tab bar holding the whole app (iOS 27+ only)
+- ✅ **NativeRootTabBar** - The system tab bar holding the whole app (iOS 26+ only)
 
 ## Design Philosophy
 

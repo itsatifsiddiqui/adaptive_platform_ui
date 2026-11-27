@@ -6,7 +6,7 @@ import UIKit
 public class AdaptivePlatformUiPlugin: NSObject, FlutterPlugin {
 
     public static func register(with registrar: FlutterPluginRegistrar) {
-        if #available(iOS 27.0, *) {
+        if #available(iOS 26.0, *) {
             TabRootController.register(with: registrar)
         }
 
